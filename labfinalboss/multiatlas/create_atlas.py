@@ -3,6 +3,7 @@ import os
 import nibabel as nib
 import numpy as np
 
+REGISTRATIONS_BASE_DIR = r'C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MISA\labs\labfinalboss\multiatlas\registrations'
 
 def collect_paths_with_filename(directory, filename):
     """
@@ -64,7 +65,7 @@ def create_probability_atlas(registration_dir):
 
         for i in range(0,4):
             class_label_mask_img = img == i
-            print(class_label_mask_img.shape)
+            # print(class_label_mask_img.shape)
             accumulated_img[:,:,:,i] += class_label_mask_img
 
 
@@ -78,6 +79,15 @@ def create_probability_atlas(registration_dir):
 
 
 # Example usage
-registration_dir = r'C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MISA\labs\labfinalboss\multiatlas\registrations\fixed_IBSR_12'
-intensity_atlas = create_intensity_atlas(registration_dir)
-prob_atlas = create_probability_atlas(registration_dir)
+intensity_atlas = create_intensity_atlas(REGISTRATIONS_BASE_DIR)
+prob_atlas = create_probability_atlas(REGISTRATIONS_BASE_DIR)
+
+# %%
+for dirname in os.listdir(REGISTRATIONS_BASE_DIR):
+    print(dirname)
+    dirname = os.path.join(REGISTRATIONS_BASE_DIR, dirname)
+    intensity_atlas = create_intensity_atlas(dirname)
+    prob_atlas = create_probability_atlas(dirname)
+
+
+

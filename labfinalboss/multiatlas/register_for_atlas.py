@@ -27,21 +27,6 @@ def get_file_paths(base_dir):
                 if os.path.exists(labels_path): data[subset]['labels'].append(labels_path)
     return data
 
-def minmax_normalize(image):
-    """Normalize the image to the range [0, 255] and convert to uint8."""
-    image_min = np.min(image)
-    image_max = np.max(image)
-    normalized_image = (image - image_min) / (image_max - image_min) * 255
-    return normalized_image.astype(np.uint8)
-
-def preprocess_image(image_path, output_path):
-    """Read, normalize, and save the NIfTI image."""
-    img = nib.load(image_path)
-    img_data = img.get_fdata()
-    normalized_data = minmax_normalize(img_data)
-    normalized_img = nib.Nifti1Image(normalized_data, img.affine, img.header)
-    nib.save(normalized_img, output_path)
-
 def modify_transform_parameters(file_path):
     """Modify the resample interpolator line in the TransformParameters file."""
     with open(file_path, 'r') as file:
