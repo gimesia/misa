@@ -3,32 +3,17 @@ import os
 import nibabel as nib
 import numpy as np
 
-REGISTRATIONS_BASE_DIR = r'C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MISA\labs\labfinalboss\multiatlas\registrations'
+from labfinalboss.multiatlas.utils import REGISTRATION_DIR, collect_paths_with_filename
 
-def collect_paths_with_filename(directory, filename):
-    """
-    Collect all paths in the given directory and its subdirectories that have the specified filename.
+REGISTRATIONS_BASE_DIR = REGISTRATION_DIR
 
-    :param directory: The base directory to search in.
-    :param filename: The specific filename to look for.
-    :return: A list of paths that match the specified filename.
-    """
-    matching_paths = []
-    for root, _, files in os.walk(directory):
-        if filename in files:
-            matching_paths.append(os.path.join(root, filename))
-    return matching_paths
-
-# Example usage
-directory = r'C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MISA\labs\labfinalboss\multiatlas\registrations\fixed_IBSR_12'
-label_imgs = 'result.nii.gz'
-registered_imgs = 'result.1.nii.gz'
-paths = collect_paths_with_filename(directory, label_imgs)
-print(paths)
-
-# %%
 def create_intensity_atlas(registration_dir):
+    fixed_name = os.path.split(registration_dir)[-1].replace("fixed_", "")
     paths = collect_paths_with_filename(registration_dir, 'result.1.nii.gz')
+    extra_paths = collect_paths_with_filename(registration_dir, fixed_name)
+
+    print(f"Creating intensity atlas for fixed {fixed_name}")
+    paths = [*paths, *extra_paths]
 
     acc_img = None
     nii_img = None
@@ -49,9 +34,13 @@ def create_intensity_atlas(registration_dir):
 
     return acc_img.get_fdata()
 
-# %%
 def create_probability_atlas(registration_dir):
+    fixed_name = os.path.split(registration_dir)[-1].replace("fixed_", "")
     paths = collect_paths_with_filename(registration_dir, 'result.nii.gz')
+    extra_paths = collect_paths_with_filename(registration_dir, fixed_name)
+
+    print(f"Creating probability atlas for fixed {fixed_name}")
+    paths = [*paths, *extra_paths]
 
     accumulated_img = None
     nii_img = None
@@ -61,7 +50,7 @@ def create_probability_atlas(registration_dir):
 
         if accumulated_img is None:
             accumulated_img = np.zeros((*img.shape, 4))
-            print(accumulated_img.shape)
+            # print(accumulated_img.shape)
 
         for i in range(0,4):
             class_label_mask_img = img == i
@@ -78,13 +67,13 @@ def create_probability_atlas(registration_dir):
     return accumulated_img.get_fdata()
 
 
-# Example usage
-intensity_atlas = create_intensity_atlas(REGISTRATIONS_BASE_DIR)
-prob_atlas = create_probability_atlas(REGISTRATIONS_BASE_DIR)
+# %% Example usage
+intensity_atlas = create_intensity_atlas(f"{REGISTRATIONS_BASE_DIR}\\fixed_IBSR_12")
+prob_atlas = create_probability_atlas(f"{REGISTRATIONS_BASE_DIR}\\fixed_IBSR_12")
 
-# %%
+# %% CREATING ATLAS FOR ALL REGISTRATIONS
 for dirname in os.listdir(REGISTRATIONS_BASE_DIR):
-    print(dirname)
+    # print(dirname)
     dirname = os.path.join(REGISTRATIONS_BASE_DIR, dirname)
     intensity_atlas = create_intensity_atlas(dirname)
     prob_atlas = create_probability_atlas(dirname)
