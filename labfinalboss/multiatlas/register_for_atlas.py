@@ -6,6 +6,7 @@ import shutil
 import numpy as np
 import nibabel as nib
 
+OUTDIR_BASE = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MISA\labs\labfinalboss\multiatlas\registrations"
 
 def get_file_paths(base_dir):
     data = {
@@ -63,10 +64,18 @@ def run_elastix_par0010(fixed_path, moving_path):
     # Path to the bspline parameter file
     param_bspline = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MIRA\lab\lab2\elastix_model_zoo\models\Par0010\Par0010bspline.txt"
 
-    out_dir = moving_path.replace(r"dataset", rf"multiatlas\registered").replace(".nii.gz", "")  # Output directory
+    fixed_image_name = os.path.basename(fixed_path).replace(".nii.gz", "")
+    moving_image_name = os.path.basename(moving_path).replace(".nii.gz", "")
+    out_dir = os.path.join(OUTDIR_BASE, f"fixed_{fixed_image_name}", moving_image_name)  # Output directory
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
+
+    if fixed_path == moving_path:
+        # Copy the fixed image to the output directory
+        shutil.copy(fixed_path, os.path.join(out_dir, os.path.basename(fixed_path)))
+        print(f"Copied fixed image to {out_dir}")
+        return
 
     command = [
         elastix_exe,
@@ -77,22 +86,13 @@ def run_elastix_par0010(fixed_path, moving_path):
         "-out", out_dir,
     ]
 
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    process = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    process.wait()
 
-    while True:
-        output = process.stdout.readline()
-        if output == "" and process.poll() is not None:
-            break
-        if output:
-            print(output.strip())
-
-    stderr = process.communicate()[1]
     if process.returncode != 0:
-        print(f"Error running elastix: {stderr}")
+        print(f"Error running elastix: {process.returncode}")
     else:
         print("Elastix completed successfully.")
-
-
 
     # Transform the label image using transformix
     label_image = moving_path.replace(".nii.gz", "_seg.nii.gz")
@@ -106,18 +106,11 @@ def run_elastix_par0010(fixed_path, moving_path):
         "-tp", transform_param_file,
     ]
 
-    transform_process = subprocess.Popen(transform_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    transform_process = subprocess.Popen(transform_command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    transform_process.wait()
 
-    while True:
-        output = transform_process.stdout.readline()
-        if output == "" and transform_process.poll() is not None:
-            break
-        if output:
-            print(output.strip())
-
-    transform_stderr = transform_process.communicate()[1]
     if transform_process.returncode != 0:
-        print(f"Error running transformix: {transform_stderr}")
+        print(f"Error running transformix: {transform_process.returncode}")
     else:
         print("Transformix completed successfully.")
 
@@ -134,14 +127,12 @@ def run_elastix_par0010(fixed_path, moving_path):
 base_dir = r'labfinalboss\dataset'
 file_paths = get_file_paths(base_dir)
 print(file_paths)
-
-# %%
 file_paths["Training_Set"]["labels"]
 
 # %%
-fixed_image = file_paths["Validation_Set"]["img"][1] # IBSR_12.nii.gz
+fixed_image_path = file_paths["Validation_Set"]["img"][1] # IBSR_12.nii.gz
 
-run_elastix_par0010(fixed_image, file_paths["Training_Set"]["img"][0])
+run_elastix_par0010(fixed_image_path, file_paths["Training_Set"]["img"][0])
 
 # %%
 # run_elastix_par0010(fixed_image, file_paths["Training_Set"]["img"][0])
@@ -149,17 +140,19 @@ run_elastix_par0010(fixed_image, file_paths["Training_Set"]["img"][0])
 # %%
 def process_images(fixed_image, image_paths):
     for moving_image in image_paths:
-        if moving_image == fixed_image:
-            # Copy the fixed image to the output directory
-            out_dir = moving_image.replace(r"dataset", rf"multiatlas\registered").replace(".nii.gz", "")
-            if not os.path.exists(out_dir):
-                os.makedirs(out_dir)
-            shutil.copy(fixed_image, os.path.join(out_dir, os.path.basename(fixed_image)))
-        else:
-            # Run elastix for other images
-            run_elastix_par0010(fixed_image, moving_image)
+        print("")
+        run_elastix_par0010(fixed_image, moving_image)
 
 # Example usage
-fixed_image = file_paths["Validation_Set"]["img"][1]  # IBSR_12.nii.gz
-all_images = file_paths["Training_Set"]["img"]
-process_images(fixed_image, all_images)
+fixed_image_path = file_paths["Validation_Set"]["img"][1]  # IBSR_12.nii.gz
+training_images = file_paths["Training_Set"]["img"]
+#process_images(fixed_image_path, training_images)
+
+# %%
+training_images
+
+# %%
+for fixed_image in file_paths["Training_Set"]["img"]:
+    print(f"REGISTERING TRAINING SET ONTO: {fixed_image}")
+    process_images(fixed_image, training_images)
+    print("_________________________________________________________")
