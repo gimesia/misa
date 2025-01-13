@@ -1,16 +1,15 @@
 # %%
 import os
-from pyclbr import readmodule
 
 import nibabel as nib
 import numpy as np
 from scipy.signal import correlate
 
 from labfinalboss.multiatlas.utils import collect_paths_with_filename, get_dataset_file_paths, REGISTRATION_DIR, \
-    get_prob_atlases, get_int_atlases, read_nii
+    get_prob_atlases, get_int_atlases, read_nii, run_elastix_par0010, modify_transform_parameters
 
-probs = get_prob_atlases()
-ints = get_int_atlases()
+probs, prob_paths = get_prob_atlases()
+ints, int_paths = get_int_atlases()
 print(probs.shape)
 print(ints.shape)
 
@@ -33,7 +32,7 @@ def normalized_cross_correlation(img1, img2):
 
     return numerator / denominator
 
-def find_best_match_ncc(input_img, img_list):
+def find_best_match_ncc(input_img, img_list, verbose=False):
     """
     Find the index of the image in img_list that has the highest normalized cross-correlation with input_img.
 
@@ -45,7 +44,9 @@ def find_best_match_ncc(input_img, img_list):
     highest_ncc = -1
 
     for i, img in enumerate(img_list):
-        ncc = normalized_cross_correlation(input_img, img)
+        if verbose:
+            print(f"Comparing input image to image {i}")
+        ncc = normalized_cross_correlation(np.squeeze(input_img), img)
         if ncc > highest_ncc:
             highest_ncc = ncc
             best_index = i
@@ -56,11 +57,24 @@ def find_best_match_ncc(input_img, img_list):
 dic = get_dataset_file_paths()
 dic
 
+# %%
+def run_elastix_on_all_atlases(input_image_path, override=False, transform=True):
+    """
+    Run elastix registration on all intensity atlases using the input image as the moving image.
+
+    :param input_image_path: Path to the input image to be registered.
+    :param override: Boolean indicating if existing registrations should be overridden.
+    :param transform: Boolean indicating if the transformation part should be executed.
+    """
+    intensity_atlases, atlas_paths = get_int_atlases()
+
+    for moving_image_path in atlas_paths:
+        print(f"Running elastix for\n"+
+              f"\tfixed image: {input_image_path}\n"
+              f"\nmoving image: {moving_image_path}")
+        run_elastix_par0010(input_image_path, moving_image_path, atlas=True, override=override)
+
+
 
 # %%
-def get_atlas_register(fixed_img_path):
-    img = read_nii(fixed_img_path)
-
-    prob_index = find_best_match_ncc(img, probs)
-    print(f"Best probability atlas: {prob_index}")
-
+run_elastix_on_all_atlases(dic["Validation_Set"]["img"][3])

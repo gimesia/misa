@@ -21,24 +21,37 @@ def modify_transform_parameters(file_path):
             else:
                 file.write(line)
 
-def run_elastix_par0010(fixed_path, moving_path):
-    # Path to the elastix & transformix executable
+def run_elastix_par0010(fixed_path, moving_path, atlas=False, override=False):
+    """
+    Run elastix registration with the specified fixed and moving images.
+
+    :param fixed_path: Path to the fixed image.
+    :param moving_path: Path to the moving image. (If atlas is True, this should be the atlas)
+    :param atlas: Boolean indicating if the registration is for an atlas.
+    :param override: Boolean indicating if existing registrations should be overridden.
+    """
     elastix_exe = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MIRA\lab\lab2\elastix-5.0.0-win64\elastix.exe"
     transformix_exe = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MIRA\lab\lab2\elastix-5.0.0-win64\transformix.exe"
-    # Path to the affine parameter file
     param_affine = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MIRA\lab\lab2\elastix_model_zoo\models\Par0010\Par0010affine.txt"
-    # Path to the bspline parameter file
     param_bspline = r"C:\Users\gimes\OneDrive\MAIA\3_UdG\classes\MIRA\lab\lab2\elastix_model_zoo\models\Par0010\Par0010bspline.txt"
 
-    fixed_image_name = os.path.basename(fixed_path).replace(".nii.gz", "")
-    moving_image_name = os.path.basename(moving_path).replace(".nii.gz", "")
-    out_dir = os.path.join(REGISTRATION_DIR, f"fixed_{fixed_image_name}", moving_image_name)  # Output directory
+    if atlas:
+        moving_image_name = os.path.split(os.path.split(moving_path)[-2])[-1].__str__().replace("fixed", "atlas")
+        fixed_image_name = os.path.split(fixed_path)[-1].replace(".nii.gz", "")
+        out_dir = os.path.join(REGISTRATION_DIR, "atlas", f"fixed_{fixed_image_name}", moving_image_name)
+    else:
+        fixed_image_name = os.path.split(fixed_path)[-1].replace(".nii.gz", "")
+        moving_image_name = os.path.split(moving_path)[-1].replace(".nii.gz", "")
+        out_dir = os.path.join(REGISTRATION_DIR, f"fixed_{fixed_image_name}", moving_image_name)
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    if not override and os.path.exists(os.path.join(out_dir, "result.1.nii.gz")):
+        print(f"Registration already exists for fixed image {fixed_image_name} and moving image {moving_image_name}. Skipping registration.")
+        return
+
     if fixed_path == moving_path:
-        # Copy the fixed image to the output directory
         shutil.copy(fixed_path, os.path.join(out_dir, os.path.basename(fixed_path)))
         print(f"Copied fixed image to {out_dir}")
         return
@@ -57,38 +70,85 @@ def run_elastix_par0010(fixed_path, moving_path):
 
     if process.returncode != 0:
         print(f"Error running elastix: {process.returncode}")
+        return
+
+    if atlas:
+        probability_map_path = moving_path.replace("intensity", "prob")
+        probability_map = nib.load(probability_map_path).get_fdata()
+        output_3d_files = []
+        aff = nib.load(fr"{out_dir}\result.1.nii.gz").affine
+        print(f"Affine: {aff}")
+        for i in range(probability_map.shape[3]):
+            print(f"Processing class {i} of the probability map...")
+            class_3d = probability_map[:, :, :, i]
+            class_3d_path = os.path.join(out_dir, f"class_{i}.nii.gz")
+            nib.save(nib.Nifti1Image(class_3d, aff), class_3d_path)
+
+            transform_param_file = os.path.join(out_dir, "TransformParameters.1.txt")
+            # modify_transform_parameters(transform_param_file)
+
+            transform_command = [
+                transformix_exe,
+                "-in", class_3d_path,
+                "-out", out_dir,
+                "-tp", transform_param_file,
+            ]
+
+            transform_process = subprocess.Popen(transform_command,)# creationflags=subprocess.CREATE_NEW_CONSOLE)
+            transform_process.wait()
+
+            if transform_process.returncode != 0:
+                print(f"Error transforming class {i}: {transform_process.returncode}")
+            else:
+                print(f"Class {i} transformed successfully.")
+                output_3d_files.append(class_3d_path)
+
+        print("Combining transformed classes into a new 4D probability map...")
+
+        transformed_classes = [nib.load(f).get_fdata() for f in output_3d_files]
+        new_probability_map = np.stack(transformed_classes, axis=-1)
+        print(transformed_classes[0].shape)
+        print(new_probability_map.shape)
+        new_probability_map_path = os.path.join(out_dir, "transformed_probability_map.nii.gz")
+        nib.save(nib.Nifti1Image(new_probability_map, aff), new_probability_map_path)
+
+        keep_files = {"result.0.nii.gz", "result.1.nii.gz", "result.nii.gz",
+                      "TransformParameters.0.txt", "TransformParameters.1.txt",
+                      "transformed_probability_map.nii.gz"}
+        # for filename in os.listdir(out_dir):
+        #     if filename not in keep_files:
+        #         file_path = os.path.join(out_dir, filename)
+        #         if os.path.isfile(file_path):
+        #             print(f"Deleting file: {file_path}")
+        #             os.remove(file_path)
+        # print("Intermediate files cleaned up.")
     else:
-        print("Elastix completed successfully.")
+        label_image = moving_path.replace(".nii.gz", "_seg.nii.gz")
+        transform_param_file = os.path.join(out_dir, "TransformParameters.1.txt")
+        modify_transform_parameters(transform_param_file)
 
-    # Transform the label image using transformix
-    label_image = moving_path.replace(".nii.gz", "_seg.nii.gz")
-    transform_param_file = os.path.join(out_dir, "TransformParameters.1.txt")
-    modify_transform_parameters(transform_param_file)
+        transform_command = [
+            transformix_exe,
+            "-in", label_image,
+            "-out", out_dir,
+            "-tp", transform_param_file,
+        ]
 
-    transform_command = [
-        transformix_exe,
-        "-in", label_image,
-        "-out", out_dir,
-        "-tp", transform_param_file,
-    ]
+        transform_process = subprocess.Popen(transform_command,)# creationflags=subprocess.CREATE_NEW_CONSOLE)
+        transform_process.wait()
 
-    transform_process = subprocess.Popen(transform_command, creationflags=subprocess.CREATE_NEW_CONSOLE)
-    transform_process.wait()
+        if transform_process.returncode != 0:
+            print(f"Error running transformix: {transform_process.returncode}")
+        else:
+            print("Transformix completed successfully.")
 
-    if transform_process.returncode != 0:
-        print(f"Error running transformix: {transform_process.returncode}")
-    else:
-        print("Transformix completed successfully.")
-
-    # Delete all other files in the output directory except the specified ones
-    keep_files = {"result.0.nii.gz", "result.1.nii.gz", "result.nii.gz",
-                  "TransformParameters.0.txt", "TransformParameters.1.txt"}
-    for filename in os.listdir(out_dir):
-        if filename not in keep_files:
-            file_path = os.path.join(out_dir, filename)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-
+        keep_files = {"result.0.nii.gz", "result.1.nii.gz", "result.nii.gz",
+                      "TransformParameters.0.txt", "TransformParameters.1.txt"}
+        for filename in os.listdir(out_dir):
+            if filename not in keep_files:
+                file_path = os.path.join(out_dir, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
 
 def collect_paths_with_filename(directory, filename):
     """
@@ -152,15 +212,23 @@ def read_nii(path):
     return nib.load(path).get_fdata()
 
 def get_prob_atlases():
+    """
+    Get the probability atlases from the registration directory.
+    :return: A numpy array of probability atlases.
+    """
     paths = collect_paths_with_filename(REGISTRATION_DIR, 'prob_atlas.nii.gz')
     ims = []
     for path in paths:
         ims.append(nib.load(path).get_fdata())
-    return np.array(ims)
+    return np.array(ims), paths
 
 def get_int_atlases():
+    """
+    Get the intensity atlases from the registration directory.
+    :return:
+    """
     paths = collect_paths_with_filename(REGISTRATION_DIR, 'intensity_atlas.nii.gz')
     ims = []
     for path in paths:
         ims.append(nib.load(path).get_fdata())
-    return np.array(ims)
+    return np.array(ims), paths

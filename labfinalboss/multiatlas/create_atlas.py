@@ -30,6 +30,7 @@ def create_intensity_atlas(registration_dir):
     acc_img = nib.Nifti1Image(acc_img, nii_img.affine)
 
     # Save the resulting intensity atlas
+    print(f"Saving intensity atlas to {registration_dir}")
     nib.save(acc_img, rf"{registration_dir}\intensity_atlas.nii.gz")
 
     return acc_img.get_fdata()
@@ -62,6 +63,7 @@ def create_probability_atlas(registration_dir):
     accumulated_img = nib.Nifti1Image(accumulated_img, nii_img.affine)
 
     # Save the resulting intensity atlas
+    print(f"Saving probability atlas to {registration_dir}")
     nib.save(accumulated_img, rf"{registration_dir}\prob_atlas.nii.gz")
 
     return accumulated_img.get_fdata()
