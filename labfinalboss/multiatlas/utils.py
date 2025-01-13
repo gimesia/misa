@@ -48,7 +48,7 @@ def run_elastix_par0010(fixed_path, moving_path, atlas=False, override=False):
         os.makedirs(out_dir)
 
     if not override and os.path.exists(os.path.join(out_dir, "result.1.nii.gz")):
-        print(f"Registration already exists for fixed image {fixed_image_name} and moving image {moving_image_name}. Skipping registration.")
+        print(f"Registration already exists for\n\tfixed image {fixed_image_name}\n\tmoving image {moving_image_name}. Skipping registration.")
         return
 
     if fixed_path == moving_path:
@@ -115,13 +115,13 @@ def run_elastix_par0010(fixed_path, moving_path, atlas=False, override=False):
         keep_files = {"result.0.nii.gz", "result.1.nii.gz", "result.nii.gz",
                       "TransformParameters.0.txt", "TransformParameters.1.txt",
                       "transformed_probability_map.nii.gz"}
-        # for filename in os.listdir(out_dir):
-        #     if filename not in keep_files:
-        #         file_path = os.path.join(out_dir, filename)
-        #         if os.path.isfile(file_path):
-        #             print(f"Deleting file: {file_path}")
-        #             os.remove(file_path)
-        # print("Intermediate files cleaned up.")
+        for filename in os.listdir(out_dir):
+            if filename not in keep_files:
+                file_path = os.path.join(out_dir, filename)
+                if os.path.isfile(file_path):
+                    print(f"Deleting file: {file_path}")
+                    os.remove(file_path)
+        print("Intermediate files cleaned up.")
     else:
         label_image = moving_path.replace(".nii.gz", "_seg.nii.gz")
         transform_param_file = os.path.join(out_dir, "TransformParameters.1.txt")
@@ -232,3 +232,33 @@ def get_int_atlases():
     for path in paths:
         ims.append(nib.load(path).get_fdata())
     return np.array(ims), paths
+
+
+import numpy as np
+
+
+def dice_score_per_class(predicted, ground_truth, num_classes):
+    """
+    Calculate the Dice score for each class.
+
+    :param predicted: The predicted segmentation (3D numpy array).
+    :param ground_truth: The ground truth segmentation (3D numpy array).
+    :param num_classes: The number of classes.
+    :return: A list of Dice scores for each class.
+    """
+    dice_scores = []
+    for c in range(1, num_classes + 1):  # assuming labels start from 1 for tissues
+        pred_class = (predicted == c).astype(np.float32)
+        gt_class = (ground_truth == c).astype(np.float32)
+
+        intersection = np.sum(pred_class * gt_class)
+        union = np.sum(pred_class) + np.sum(gt_class)
+
+        if union == 0:
+            dice = 1.0  # If both the prediction and ground truth are empty, the Dice score is 1
+        else:
+            dice = 2.0 * intersection / union
+
+        dice_scores.append(dice)
+
+    return dice_scores
